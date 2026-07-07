@@ -1,0 +1,18 @@
+{
+  "name": "VoxTome",
+  "short_name": "VoxTome",
+  "description": "Your books, read aloud. Upload, listen, and read along.",
+  "start_url": "/library",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0d9488",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

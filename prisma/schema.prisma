@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String           @id @default(cuid())
+  email       String           @unique
+  name        String?
+  image       String?
+  createdAt   DateTime         @default(now())
+  books       Book[]
+  preferences UserPreferences?
+}
+
+model UserPreferences {
+  userId        String  @id
+  defaultAccent String  @default("AMERICAN")
+  defaultSpeed  Float   @default(1.0)
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Book {
+  id          String            @id @default(cuid())
+  userId      String
+  title       String
+  fileName    String
+  fileType    String
+  storagePath String
+  totalChunks Int               @default(0)
+  createdAt   DateTime          @default(now())
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chunks      TextChunk[]
+  progress    ReadingProgress?
+
+  @@index([userId])
+}
+
+model TextChunk {
+  id      String @id @default(cuid())
+  bookId  String
+  index   Int
+  content String
+  book    Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, index])
+  @@index([bookId])
+}
+
+model ReadingProgress {
+  id         String   @id @default(cuid())
+  userId     String
+  bookId     String   @unique
+  chunkIndex Int      @default(0)
+  positionMs Int      @default(0)
+  accent     String   @default("AMERICAN")
+  speed      Float    @default(1.0)
+  updatedAt  DateTime @updatedAt
+  book       Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([updatedAt])
+}

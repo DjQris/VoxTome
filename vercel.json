@@ -1,0 +1,11 @@
+{
+  "framework": "nextjs",
+  "functions": {
+    "app/api/books/upload/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/tts/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
