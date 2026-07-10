@@ -27,6 +27,19 @@ async function ensureLocalDir(filePath: string) {
   await mkdir(dirname(filePath), { recursive: true })
 }
 
+export async function createSignedUploadUrl(path: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUploadUrl(path, { upsert: true })
+
+  if (error || !data) {
+    throw error ?? new Error("Failed to create signed upload URL")
+  }
+
+  return data
+}
+
 export async function saveFile(path: string, data: Buffer) {
   if (useSupabase()) {
     const supabase = getSupabase()

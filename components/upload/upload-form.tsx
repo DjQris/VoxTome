@@ -6,10 +6,25 @@ import { CloudArrowUpIcon, FileTextIcon } from "@phosphor-icons/react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import { parseResponseJson } from "@/lib/parse-response-json"
+import { MAX_UPLOAD_BYTES } from "@/lib/upload-constants"
 import { cn } from "@/lib/utils"
 
 const ACCEPTED_TYPES = ".pdf,.docx,.epub"
-const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024
+
+type UploadUrlResponse = {
+  mode?: "direct" | "signed"
+  bookId?: string
+  storagePath?: string
+  signedUrl?: string
+  token?: string
+  error?: string
+}
+
+type UploadResponse = {
+  id?: string
+  error?: string
+}
 
 export function UploadForm() {
   const router = useRouter()
@@ -22,20 +37,66 @@ export function UploadForm() {
     setIsUploading(true)
 
     try {
-      const formData = new FormData()
-      formData.append("file", file)
-
-      const response = await fetch("/api/books/upload", {
+      const prepareResponse = await fetch("/api/books/upload-url", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileSize: file.size,
+        }),
       })
 
-      const payload = (await response.json()) as {
-        id?: string
-        error?: string
+      const preparePayload = await parseResponseJson<UploadUrlResponse>(
+        prepareResponse
+      )
+
+      if (!prepareResponse.ok) {
+        throw new Error(preparePayload.error ?? "Failed to prepare upload")
       }
 
-      if (!response.ok || !payload.id) {
+      let processResponse: Response
+
+      if (preparePayload.mode === "signed") {
+        const { bookId, storagePath, signedUrl } = preparePayload
+
+        if (!bookId || !storagePath || !signedUrl) {
+          throw new Error("Upload configuration was incomplete")
+        }
+
+        const storageResponse = await fetch(signedUrl, {
+          method: "PUT",
+          body: file,
+          headers: {
+            "Content-Type": file.type || "application/octet-stream",
+          },
+        })
+
+        if (!storageResponse.ok) {
+          throw new Error("Failed to upload file to storage")
+        }
+
+        processResponse = await fetch("/api/books/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookId,
+            storagePath,
+            fileName: file.name,
+          }),
+        })
+      } else {
+        const formData = new FormData()
+        formData.append("file", file)
+
+        processResponse = await fetch("/api/books/upload", {
+          method: "POST",
+          body: formData,
+        })
+      }
+
+      const payload = await parseResponseJson<UploadResponse>(processResponse)
+
+      if (!processResponse.ok || !payload.id) {
         throw new Error(payload.error ?? "Upload failed")
       }
 
@@ -57,7 +118,7 @@ export function UploadForm() {
       return
     }
 
-    if (file.size > MAX_FILE_SIZE_BYTES) {
+    if (file.size > MAX_UPLOAD_BYTES) {
       toast.error("File is too large. Maximum size is 50 MB.")
       return
     }
