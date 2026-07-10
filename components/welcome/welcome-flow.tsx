@@ -20,24 +20,19 @@ export function WelcomeFlow() {
   }, [])
 
   return (
-    <main className="relative flex min-h-dvh flex-col items-center justify-center px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1.5rem,env(safe-area-inset-top))]">
-      <div
-        className={cn(
-          "absolute inset-0 flex items-center justify-center px-6 transition-all duration-700",
-          phase === "splash"
-            ? "pointer-events-auto translate-y-0 opacity-100"
-            : "pointer-events-none -translate-y-4 opacity-0"
-        )}
-      >
-        <SplashScreen />
-      </div>
+    <main className="relative flex min-h-dvh flex-col items-center justify-start overflow-y-auto overscroll-y-contain px-6 py-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:justify-center">
+      {phase === "splash" ? (
+        <div className="absolute inset-0 flex items-center justify-center px-6 transition-opacity duration-700">
+          <SplashScreen />
+        </div>
+      ) : null}
 
       <div
         className={cn(
-          "relative z-10 flex w-full flex-col items-center transition-all duration-700 delay-150",
+          "relative z-10 flex w-full max-w-md flex-col items-center py-4 transition-all duration-700 sm:py-0",
           phase === "onboarding"
             ? "translate-y-0 opacity-100"
-            : "pointer-events-none translate-y-6 opacity-0"
+            : "pointer-events-none absolute inset-x-6 top-0 translate-y-4 opacity-0"
         )}
       >
         <div className="mb-8 flex flex-col items-center text-center">
