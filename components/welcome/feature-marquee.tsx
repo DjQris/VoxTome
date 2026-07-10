@@ -22,7 +22,7 @@ const FEATURES = [
   },
 ] as const
 
-const SCROLL_SPEED = 0.6
+const MARQUEE_SPEED = 48
 
 type FeatureMarqueeProps = {
   className?: string
@@ -34,7 +34,7 @@ function FeatureCard({
   feature: (typeof FEATURES)[number]
 }) {
   return (
-    <article className="bg-card text-card-foreground w-[min(85vw,260px)] shrink-0 snap-center rounded-2xl border p-5 shadow-sm select-none sm:w-[260px]">
+    <article className="bg-card text-card-foreground w-[min(85vw,260px)] shrink-0 rounded-2xl border p-5 shadow-sm select-none sm:w-[260px]">
       <span className="text-2xl" role="img" aria-hidden="true">
         {feature.emoji}
       </span>
@@ -47,26 +47,45 @@ function FeatureCard({
 }
 
 export function FeatureMarquee({ className }: FeatureMarqueeProps) {
+  const viewportRef = React.useRef<HTMLDivElement>(null)
   const trackRef = React.useRef<HTMLDivElement>(null)
+  const offsetRef = React.useRef(0)
   const loopWidthRef = React.useRef(0)
   const isDraggingRef = React.useRef(false)
   const isPausedRef = React.useRef(false)
-  const dragStartXRef = React.useRef(0)
-  const dragStartScrollRef = React.useRef(0)
+  const lastPointerXRef = React.useRef(0)
   const resumeTimeoutRef = React.useRef<number | null>(null)
+  const rafRef = React.useRef(0)
+  const lastFrameTimeRef = React.useRef(0)
 
-  const normalizeScroll = React.useCallback((element: HTMLDivElement) => {
+  const applyOffset = React.useCallback(() => {
+    const track = trackRef.current
+    if (!track) return
+
+    track.style.transform = `translate3d(${offsetRef.current}px, 0, 0)`
+  }, [])
+
+  const normalizeOffset = React.useCallback(() => {
     const loopWidth = loopWidthRef.current
     if (loopWidth <= 0) return
 
-    while (element.scrollLeft >= loopWidth) {
-      element.scrollLeft -= loopWidth
+    while (offsetRef.current <= -loopWidth) {
+      offsetRef.current += loopWidth
     }
 
-    while (element.scrollLeft < 0) {
-      element.scrollLeft += loopWidth
+    while (offsetRef.current > 0) {
+      offsetRef.current -= loopWidth
     }
   }, [])
+
+  const measure = React.useCallback(() => {
+    const track = trackRef.current
+    if (!track) return
+
+    loopWidthRef.current = track.scrollWidth / 2
+    normalizeOffset()
+    applyOffset()
+  }, [applyOffset, normalizeOffset])
 
   const pause = React.useCallback(() => {
     isPausedRef.current = true
@@ -76,7 +95,7 @@ export function FeatureMarquee({ className }: FeatureMarqueeProps) {
     }
   }, [])
 
-  const scheduleResume = React.useCallback((delayMs = 1200) => {
+  const scheduleResume = React.useCallback((delayMs = 1000) => {
     if (resumeTimeoutRef.current !== null) {
       window.clearTimeout(resumeTimeoutRef.current)
     }
@@ -88,80 +107,86 @@ export function FeatureMarquee({ className }: FeatureMarqueeProps) {
   }, [])
 
   React.useEffect(() => {
+    measure()
+
     const track = trackRef.current
     if (!track) return
-
-    const measure = () => {
-      loopWidthRef.current = track.scrollWidth / 2
-      normalizeScroll(track)
-    }
-
-    measure()
 
     const resizeObserver = new ResizeObserver(measure)
     resizeObserver.observe(track)
 
-    let frame = 0
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
-    ).matches
+    )
 
-    const tick = () => {
+    const tick = (time: number) => {
+      if (lastFrameTimeRef.current === 0) {
+        lastFrameTimeRef.current = time
+      }
+
+      const deltaSeconds = (time - lastFrameTimeRef.current) / 1000
+      lastFrameTimeRef.current = time
+
       if (
-        !reducedMotion &&
+        !reducedMotion.matches &&
         !isPausedRef.current &&
         !isDraggingRef.current &&
         loopWidthRef.current > 0
       ) {
-        track.scrollLeft += SCROLL_SPEED
-        normalizeScroll(track)
+        offsetRef.current -= MARQUEE_SPEED * deltaSeconds
+        normalizeOffset()
+        applyOffset()
       }
 
-      frame = window.requestAnimationFrame(tick)
+      rafRef.current = window.requestAnimationFrame(tick)
     }
 
-    frame = window.requestAnimationFrame(tick)
+    rafRef.current = window.requestAnimationFrame(tick)
 
     return () => {
       resizeObserver.disconnect()
-      window.cancelAnimationFrame(frame)
+      window.cancelAnimationFrame(rafRef.current)
       if (resumeTimeoutRef.current !== null) {
         window.clearTimeout(resumeTimeoutRef.current)
       }
     }
-  }, [normalizeScroll])
+  }, [applyOffset, measure, normalizeOffset])
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    const track = trackRef.current
-    if (!track) return
+    if (event.button !== 0) return
+
+    const viewport = viewportRef.current
+    if (!viewport) return
 
     isDraggingRef.current = true
     pause()
-    dragStartXRef.current = event.clientX
-    dragStartScrollRef.current = track.scrollLeft
-    track.setPointerCapture(event.pointerId)
+    lastPointerXRef.current = event.clientX
+    viewport.setPointerCapture(event.pointerId)
   }
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const track = trackRef.current
-    if (!track || !isDraggingRef.current) return
+    if (!isDraggingRef.current) return
 
-    const delta = event.clientX - dragStartXRef.current
-    track.scrollLeft = dragStartScrollRef.current - delta
-    normalizeScroll(track)
+    const deltaX = event.clientX - lastPointerXRef.current
+    lastPointerXRef.current = event.clientX
+
+    offsetRef.current += deltaX
+    normalizeOffset()
+    applyOffset()
   }
 
   const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    const track = trackRef.current
-    if (!track || !isDraggingRef.current) return
+    if (!isDraggingRef.current) return
 
+    const viewport = viewportRef.current
     isDraggingRef.current = false
 
-    if (track.hasPointerCapture(event.pointerId)) {
-      track.releasePointerCapture(event.pointerId)
+    if (viewport?.hasPointerCapture(event.pointerId)) {
+      viewport.releasePointerCapture(event.pointerId)
     }
 
-    normalizeScroll(track)
+    normalizeOffset()
+    applyOffset()
     scheduleResume()
   }
 
@@ -175,49 +200,42 @@ export function FeatureMarquee({ className }: FeatureMarqueeProps) {
       )}
     >
       <div
-        className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-gradient-to-r from-background to-transparent"
+        className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-background to-transparent"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-background to-transparent"
+        className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-background to-transparent"
         aria-hidden="true"
       />
 
       <div
-        ref={trackRef}
+        ref={viewportRef}
         role="region"
         aria-label="VoxTome features"
         className={cn(
-          "flex snap-x snap-mandatory gap-3 overflow-x-auto px-6 pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-          "cursor-grab touch-pan-x active:cursor-grabbing"
+          "overflow-hidden pb-2",
+          "cursor-grab touch-pan-y active:cursor-grabbing"
         )}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        onPointerLeave={(event) => {
-          if (isDraggingRef.current) endDrag(event)
-        }}
-        onMouseEnter={pause}
-        onMouseLeave={() => scheduleResume(400)}
-        onWheel={(event) => {
-          const track = trackRef.current
-          if (!track) return
-
-          if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-            pause()
-            track.scrollLeft += event.deltaY
-            normalizeScroll(track)
-            scheduleResume(800)
-          }
+        onLostPointerCapture={() => {
+          isDraggingRef.current = false
+          scheduleResume()
         }}
       >
-        {duplicatedFeatures.map((feature, index) => (
-          <FeatureCard
-            key={`${feature.title}-${index}`}
-            feature={feature}
-          />
-        ))}
+        <div
+          ref={trackRef}
+          className="flex w-max gap-3 px-6 will-change-transform"
+        >
+          {duplicatedFeatures.map((feature, index) => (
+            <FeatureCard
+              key={`${feature.title}-${index}`}
+              feature={feature}
+            />
+          ))}
+        </div>
       </div>
     </div>
   )
