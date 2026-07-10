@@ -1,10 +1,9 @@
-import { after } from "next/server"
 import { NextResponse } from "next/server"
 
 import { requireSessionUser } from "@/lib/auth-helpers"
 import { getFileType } from "@/lib/parsers/file-type"
 import { prisma } from "@/lib/prisma"
-import { saveFile } from "@/lib/storage"
+import { saveFile, waitForStoredFile } from "@/lib/storage"
 import { MAX_UPLOAD_BYTES } from "@/lib/upload-constants"
 
 export const runtime = "nodejs"
@@ -22,38 +21,6 @@ function getAccent(user: Awaited<ReturnType<typeof requireSessionUser>>) {
     | "BRITISH"
     | "AMERICAN"
     | "NIGERIAN"
-}
-
-async function queueBookProcessing({
-  bookId,
-  storagePath,
-  fileName,
-  user,
-}: {
-  bookId: string
-  storagePath: string
-  fileName: string
-  user: Awaited<ReturnType<typeof requireSessionUser>>
-}) {
-  after(async () => {
-    const { cleanupFailedUpload, processBookUpload } = await import(
-      "@/lib/process-book-upload"
-    )
-
-    try {
-      await processBookUpload({
-        bookId,
-        storagePath,
-        fileName,
-        userId: user.id,
-        defaultAccent: getAccent(user),
-        defaultSpeed: user.preferences?.defaultSpeed ?? 1,
-      })
-    } catch (error) {
-      console.error("Book processing failed:", error)
-      await cleanupFailedUpload({ bookId, storagePath })
-    }
-  })
 }
 
 async function createProcessingBook({
@@ -93,7 +60,48 @@ async function createProcessingBook({
   })
 }
 
+async function finalizeUploadedBook({
+  bookId,
+  storagePath,
+  fileName,
+  user,
+}: {
+  bookId: string
+  storagePath: string
+  fileName: string
+  user: Awaited<ReturnType<typeof requireSessionUser>>
+}) {
+  await createProcessingBook({
+    bookId,
+    storagePath,
+    fileName,
+    user,
+  })
+
+  const { processBookUpload } = await import("@/lib/process-book-upload")
+
+  await processBookUpload({
+    bookId,
+    storagePath,
+    fileName,
+    userId: user.id,
+    defaultAccent: getAccent(user),
+    defaultSpeed: user.preferences?.defaultSpeed ?? 1,
+  })
+
+  return prisma.book.findUniqueOrThrow({
+    where: { id: bookId },
+    select: {
+      id: true,
+      title: true,
+      totalChunks: true,
+    },
+  })
+}
+
 export async function POST(request: Request) {
+  let createdBookId: string | null = null
+
   try {
     const user = await requireSessionUser()
     const contentType = request.headers.get("content-type") ?? ""
@@ -123,14 +131,24 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Invalid storage path" }, { status: 403 })
       }
 
-      const book = await createProcessingBook({
+      const fileReady = await waitForStoredFile(storagePath)
+      if (!fileReady) {
+        return NextResponse.json(
+          {
+            error:
+              "Uploaded file was not found in storage. Please try uploading again.",
+          },
+          { status: 400 }
+        )
+      }
+
+      createdBookId = bookId
+      const book = await finalizeUploadedBook({
         bookId,
         storagePath,
         fileName,
         user,
       })
-
-      await queueBookProcessing({ bookId, storagePath, fileName, user })
 
       return NextResponse.json(book)
     }
@@ -155,14 +173,8 @@ export async function POST(request: Request) {
 
     await saveFile(storagePath, buffer)
 
-    const book = await createProcessingBook({
-      bookId,
-      storagePath,
-      fileName: file.name,
-      user,
-    })
-
-    await queueBookProcessing({
+    createdBookId = bookId
+    const book = await finalizeUploadedBook({
       bookId,
       storagePath,
       fileName: file.name,
@@ -171,6 +183,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(book)
   } catch (error) {
+    if (createdBookId) {
+      await prisma.book.delete({ where: { id: createdBookId } }).catch(() => undefined)
+    }
+
     const message =
       error instanceof Error ? error.message : "Failed to upload book"
 

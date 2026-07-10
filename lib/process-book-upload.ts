@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import { deleteStoredPrefix, readStoredFile } from "@/lib/storage"
+import { readStoredFile } from "@/lib/storage"
 
 const CHUNK_BATCH_SIZE = 100
 
@@ -64,17 +64,4 @@ export async function processBookUpload({
     },
     update: {},
   })
-}
-
-export async function cleanupFailedUpload({
-  bookId,
-  storagePath,
-}: {
-  bookId: string
-  storagePath: string
-}) {
-  await prisma.book.delete({ where: { id: bookId } }).catch(() => undefined)
-  await deleteStoredPrefix(storagePath.split("/").slice(0, -1).join("/")).catch(
-    () => undefined
-  )
 }

@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation"
+import { redirect } from "next/navigation"
 
 import { ReaderShell } from "@/components/reader/reader-shell"
 import { getSessionUser } from "@/lib/auth-helpers"
@@ -17,7 +17,7 @@ export default async function ReaderPage({ params }: ReaderPageProps) {
   const { bookId } = await params
 
   if (!user) {
-    notFound()
+    redirect("/welcome")
   }
 
   const book = await prisma.book.findFirst({
@@ -31,12 +31,15 @@ export default async function ReaderPage({ params }: ReaderPageProps) {
   })
 
   if (!book) {
-    notFound()
+    redirect("/library")
   }
 
   const startChunk = book.progress?.chunkIndex ?? 0
   const from = Math.max(0, startChunk - CHUNK_WINDOW)
-  const to = Math.min(book.totalChunks - 1, startChunk + CHUNK_WINDOW)
+  const to =
+    book.totalChunks > 0
+      ? Math.min(book.totalChunks - 1, startChunk + CHUNK_WINDOW)
+      : 0
 
   const chunks = await prisma.textChunk.findMany({
     where: {

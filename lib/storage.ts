@@ -76,6 +76,22 @@ export async function readStoredFile(path: string) {
   return readFile(localPath)
 }
 
+export async function waitForStoredFile(
+  path: string,
+  attempts = 5,
+  delayMs = 1000
+) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (await storedFileExists(path)) {
+      return true
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, delayMs))
+  }
+
+  return false
+}
+
 export async function storedFileExists(path: string) {
   try {
     if (useSupabase()) {
