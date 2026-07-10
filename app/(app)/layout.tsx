@@ -1,8 +1,9 @@
 import Link from "next/link"
+import { redirect } from "next/navigation"
 
 import { MobileNav } from "@/components/app/mobile-nav"
 import { Button } from "@/components/ui/button"
-import { signOut } from "@/auth"
+import { auth, signOut } from "@/auth"
 import { cn } from "@/lib/utils"
 
 const NAV_LINKS = [
@@ -11,11 +12,17 @@ const NAV_LINKS = [
   { href: "/settings", label: "Settings" },
 ] as const
 
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const session = await auth()
+
+  if (!session?.user) {
+    redirect("/welcome")
+  }
+
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
