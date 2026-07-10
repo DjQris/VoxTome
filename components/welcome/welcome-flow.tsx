@@ -1,6 +1,9 @@
 "use client"
 
+import { useRouter, useSearchParams } from "next/navigation"
+import { useSession } from "next-auth/react"
 import * as React from "react"
+import { toast } from "sonner"
 
 import { OnboardingAuth } from "@/components/welcome/onboarding-auth"
 import { SplashScreen } from "@/components/welcome/splash-screen"
@@ -8,8 +11,31 @@ import { cn } from "@/lib/utils"
 
 const SPLASH_DURATION_MS = 2500
 
+const AUTH_ERRORS: Record<string, string> = {
+  Verification: "This sign-in link has expired or was already used. Request a new one.",
+  Configuration: "Sign-in is not configured correctly. Please try again later.",
+  Default: "Sign-in failed. Please request a new magic link.",
+}
+
 export function WelcomeFlow() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { status } = useSession()
   const [phase, setPhase] = React.useState<"splash" | "onboarding">("splash")
+
+  React.useEffect(() => {
+    if (status === "authenticated") {
+      router.replace("/library")
+    }
+  }, [router, status])
+
+  React.useEffect(() => {
+    const error = searchParams.get("error")
+    if (!error) return
+
+    toast.error(AUTH_ERRORS[error] ?? AUTH_ERRORS.Default)
+    router.replace("/welcome")
+  }, [router, searchParams])
 
   React.useEffect(() => {
     const timer = window.setTimeout(() => {
