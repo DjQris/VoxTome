@@ -3,8 +3,7 @@ import { writeFile, unlink, mkdtemp } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-const require = createRequire(import.meta.url)
-const EPub = require("epub2") as new (path: string) => {
+type EpubInstance = {
   on(event: "end", listener: () => void): void
   on(event: "error", listener: (error: Error) => void): void
   flow(type: string): void
@@ -15,7 +14,20 @@ const EPub = require("epub2") as new (path: string) => {
   spine: { contents: { id: string }[] }
 }
 
-function getChapter(epub: InstanceType<typeof EPub>, id: string) {
+type EpubConstructor = new (path: string) => EpubInstance
+
+let EPub: EpubConstructor | null = null
+
+function getEpubConstructor() {
+  if (!EPub) {
+    const require = createRequire(import.meta.url)
+    EPub = require("epub2") as EpubConstructor
+  }
+
+  return EPub
+}
+
+function getChapter(epub: EpubInstance, id: string) {
   return new Promise<string>((resolve, reject) => {
     epub.getChapterRaw(id, (error, text) => {
       if (error) {
@@ -29,21 +41,20 @@ function getChapter(epub: InstanceType<typeof EPub>, id: string) {
 }
 
 export async function parseEpub(buffer: Buffer) {
+  const Epub = getEpubConstructor()
   const dir = await mkdtemp(join(tmpdir(), "voxtome-epub-"))
   const filePath = join(dir, "book.epub")
 
   try {
     await writeFile(filePath, buffer)
 
-    const epub = await new Promise<InstanceType<typeof EPub>>(
-      (resolve, reject) => {
-        const instance = new EPub(filePath)
+    const epub = await new Promise<EpubInstance>((resolve, reject) => {
+      const instance = new Epub(filePath)
 
-        instance.on("end", () => resolve(instance))
-        instance.on("error", reject)
-        instance.flow("toc")
-      }
-    )
+      instance.on("end", () => resolve(instance))
+      instance.on("error", reject)
+      instance.flow("toc")
+    })
 
     const chapters = await Promise.all(
       epub.spine.contents.map((item) => getChapter(epub, item.id))

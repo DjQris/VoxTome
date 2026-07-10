@@ -3,7 +3,6 @@ import { NextResponse } from "next/server"
 
 import { requireSessionUser } from "@/lib/auth-helpers"
 import { getFileType } from "@/lib/parsers/file-type"
-import { cleanupFailedUpload, processBookUpload } from "@/lib/process-book-upload"
 import { prisma } from "@/lib/prisma"
 import { saveFile } from "@/lib/storage"
 import { MAX_UPLOAD_BYTES } from "@/lib/upload-constants"
@@ -37,6 +36,10 @@ async function queueBookProcessing({
   user: Awaited<ReturnType<typeof requireSessionUser>>
 }) {
   after(async () => {
+    const { cleanupFailedUpload, processBookUpload } = await import(
+      "@/lib/process-book-upload"
+    )
+
     try {
       await processBookUpload({
         bookId,

@@ -1,4 +1,3 @@
-import { extractText } from "@/lib/parsers"
 import { prisma } from "@/lib/prisma"
 import { deleteStoredPrefix, readStoredFile } from "@/lib/storage"
 
@@ -22,6 +21,7 @@ export async function processBookUpload({
   defaultSpeed,
 }: ProcessBookUploadInput) {
   const buffer = await readStoredFile(storagePath)
+  const { extractText } = await import("@/lib/parsers")
   const { fileType, chunks } = await extractText(fileName, buffer)
 
   if (chunks.length === 0) {
