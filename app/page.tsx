@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation"
 
-import { auth } from "@/auth"
+import { getAuthenticatedSession } from "@/lib/auth-session"
+
+export const dynamic = "force-dynamic"
 
 export default async function Page() {
-  const session = await auth()
+  const session = await getAuthenticatedSession()
 
-  if (session?.user) {
+  if (session) {
     redirect("/library")
   }
 

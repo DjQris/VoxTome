@@ -3,8 +3,11 @@ import { redirect } from "next/navigation"
 
 import { MobileNav } from "@/components/app/mobile-nav"
 import { Button } from "@/components/ui/button"
-import { auth, signOut } from "@/auth"
+import { signOut } from "@/auth"
+import { getAuthenticatedSession } from "@/lib/auth-session"
 import { cn } from "@/lib/utils"
+
+export const dynamic = "force-dynamic"
 
 const NAV_LINKS = [
   { href: "/library", label: "Library" },
@@ -17,9 +20,9 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode
 }) {
-  const session = await auth()
+  const session = await getAuthenticatedSession()
 
-  if (!session?.user) {
+  if (!session) {
     redirect("/welcome")
   }
 
@@ -45,16 +48,21 @@ export default async function AppLayout({
             ))}
           </nav>
 
-          <form
-            action={async () => {
-              "use server"
-              await signOut({ redirectTo: "/welcome" })
-            }}
-          >
-            <Button type="submit" variant="ghost" size="sm" className="shrink-0">
-              Sign out
-            </Button>
-          </form>
+          <div className="flex items-center gap-2">
+            <span className="hidden max-w-40 truncate text-xs text-muted-foreground sm:inline">
+              {session.user.email}
+            </span>
+            <form
+              action={async () => {
+                "use server"
+                await signOut({ redirectTo: "/welcome" })
+              }}
+            >
+              <Button type="submit" variant="ghost" size="sm" className="shrink-0">
+                Sign out
+              </Button>
+            </form>
+          </div>
         </div>
       </header>
 

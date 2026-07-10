@@ -20,14 +20,14 @@ const AUTH_ERRORS: Record<string, string> = {
 export function WelcomeFlow() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { status } = useSession()
+  const { data: session, status } = useSession()
   const [phase, setPhase] = React.useState<"splash" | "onboarding">("splash")
 
   React.useEffect(() => {
-    if (status === "authenticated") {
+    if (status === "authenticated" && session?.user?.email) {
       router.replace("/library")
     }
-  }, [router, status])
+  }, [router, session?.user?.email, status])
 
   React.useEffect(() => {
     const error = searchParams.get("error")
