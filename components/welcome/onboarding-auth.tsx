@@ -4,25 +4,8 @@ import * as React from "react"
 import { signIn } from "next-auth/react"
 
 import { Button } from "@/components/ui/button"
+import { FeatureMarquee } from "@/components/welcome/feature-marquee"
 import { cn } from "@/lib/utils"
-
-const FEATURES = [
-  {
-    emoji: "📚",
-    title: "Upload any book",
-    description: "PDF, DOCX, EPUB — bring your library with you.",
-  },
-  {
-    emoji: "🎙️",
-    title: "Listen your way",
-    description: "British, American, or Nigerian English accents.",
-  },
-  {
-    emoji: "📍",
-    title: "Pick up where you left off",
-    description: "Your progress is saved automatically.",
-  },
-] as const
 
 type OnboardingAuthProps = {
   className?: string
@@ -61,22 +44,7 @@ export function OnboardingAuth({ className }: OnboardingAuthProps) {
 
   return (
     <div className={cn("flex w-full max-w-md flex-col gap-8", className)}>
-      <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {FEATURES.map((feature) => (
-          <article
-            key={feature.title}
-            className="bg-card text-card-foreground w-[min(85vw,280px)] shrink-0 snap-center rounded-2xl border p-5 shadow-sm"
-          >
-            <span className="text-2xl" role="img" aria-hidden="true">
-              {feature.emoji}
-            </span>
-            <h2 className="mt-3 font-medium">{feature.title}</h2>
-            <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-              {feature.description}
-            </p>
-          </article>
-        ))}
-      </div>
+      <FeatureMarquee />
 
       {sent ? (
         <div className="flex flex-col gap-3 text-center">
