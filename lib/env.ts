@@ -30,9 +30,13 @@ type EnvCheck = {
 const PRODUCTION_CHECKS: EnvCheck[] = [
   { key: "AUTH_SECRET", label: "Auth secret", required: true },
   { key: "DATABASE_URL", label: "Database URL", required: true },
-  { key: "GOOGLE_CLIENT_ID", label: "Google client ID", required: true },
-  { key: "GOOGLE_CLIENT_SECRET", label: "Google client secret", required: true },
+  { key: "AUTH_RESEND_KEY", label: "Resend API key", required: true },
   { key: "ELEVENLABS_API_KEY", label: "ElevenLabs API key", required: true },
+  {
+    key: "AUTH_RESEND_FROM",
+    label: "Resend from address",
+    required: false,
+  },
   { key: "SUPABASE_URL", label: "Supabase URL", required: false },
   {
     key: "SUPABASE_SERVICE_ROLE_KEY",

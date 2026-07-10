@@ -53,7 +53,7 @@ export function WelcomeFlow() {
             VoxTome
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Sign in to start listening
+            Enter your email to start listening
           </p>
         </div>
 
