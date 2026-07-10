@@ -63,13 +63,27 @@ export function UploadForm() {
           throw new Error("Upload configuration was incomplete")
         }
 
-        const storageResponse = await fetch(signedUrl, {
+        const { token } = preparePayload
+        let storageResponse = await fetch(signedUrl, {
           method: "PUT",
           body: file,
           headers: {
             "Content-Type": file.type || "application/octet-stream",
           },
         })
+
+        if (!storageResponse.ok && token) {
+          const retryUrl = new URL(signedUrl)
+          retryUrl.searchParams.set("token", token)
+
+          storageResponse = await fetch(retryUrl.toString(), {
+            method: "PUT",
+            body: file,
+            headers: {
+              "Content-Type": file.type || "application/octet-stream",
+            },
+          })
+        }
 
         if (!storageResponse.ok) {
           throw new Error("Failed to upload file to storage")
@@ -100,7 +114,7 @@ export function UploadForm() {
         throw new Error(payload.error ?? "Upload failed")
       }
 
-      toast.success("Book uploaded successfully")
+      toast.success("Book uploaded. Processing text now…")
       router.push(`/reader/${payload.id}`)
       router.refresh()
     } catch (error) {

@@ -15,6 +15,12 @@ export async function parseResponseJson<T extends Record<string, unknown>>(
       )
     }
 
+    if (text.includes("__next_error__") || text.includes("<!DOCTYPE html")) {
+      throw new Error(
+        "The server hit an error while handling your upload. Try again in a moment."
+      )
+    }
+
     throw new Error(
       text.trim().slice(0, 160) || `Request failed (${response.status})`
     )

@@ -2,9 +2,12 @@ import { NextResponse } from "next/server"
 
 import { requireSessionUser } from "@/lib/auth-helpers"
 import { isSupabaseStorageConfigured } from "@/lib/env"
-import { getFileType } from "@/lib/parsers"
+import { getFileType } from "@/lib/parsers/file-type"
 import { createSignedUploadUrl } from "@/lib/storage"
 import { MAX_UPLOAD_BYTES } from "@/lib/upload-constants"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 type UploadUrlBody = {
   fileName?: string

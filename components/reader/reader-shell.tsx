@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { CloudSlashIcon } from "@phosphor-icons/react"
 
 import { ReaderControls } from "@/components/reader/reader-controls"
@@ -41,11 +42,41 @@ function loadTextSize(): TeleprompterTextSize {
 }
 
 export function ReaderShell({ book }: ReaderShellProps) {
+  const router = useRouter()
   const [textSize, setTextSize] = React.useState<TeleprompterTextSize>("md")
+  const [isProcessing, setIsProcessing] = React.useState(book.totalChunks === 0)
 
   React.useEffect(() => {
     setTextSize(loadTextSize())
   }, [])
+
+  React.useEffect(() => {
+    if (!isProcessing) {
+      return
+    }
+
+    const interval = window.setInterval(() => {
+      void fetch(`/api/books/${book.id}`)
+        .then(async (response) => {
+          if (!response.ok) {
+            return null
+          }
+
+          return response.json() as Promise<{ totalChunks?: number }>
+        })
+        .then((payload) => {
+          if (payload && (payload.totalChunks ?? 0) > 0) {
+            router.refresh()
+          }
+        })
+    }, 2000)
+
+    return () => window.clearInterval(interval)
+  }, [book.id, isProcessing, router])
+
+  React.useEffect(() => {
+    setIsProcessing(book.totalChunks === 0)
+  }, [book.totalChunks])
 
   const { chunks, getChunk, syncActiveIndex } = useBookChunks({
     bookId: book.id,
@@ -140,6 +171,26 @@ export function ReaderShell({ book }: ReaderShellProps) {
   })
 
   useWakeLock(isPlaying)
+
+  if (isProcessing) {
+    return (
+      <div className="flex min-h-[calc(100dvh-8rem)] flex-col items-center justify-center px-6 text-center">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          Preparing your book
+        </p>
+        <h1 className="mt-2 font-heading text-2xl font-semibold">{book.title}</h1>
+        <p className="mt-3 max-w-sm text-sm text-muted-foreground">
+          Extracting text and getting audio ready. This usually takes a few
+          seconds.
+        </p>
+        <Link href="/library" className="mt-6">
+          <Button variant="ghost" size="sm">
+            Back to library
+          </Button>
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-[calc(100dvh-8rem)] flex-col">

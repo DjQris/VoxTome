@@ -1,11 +1,15 @@
+import { after } from "next/server"
 import { NextResponse } from "next/server"
 
 import { requireSessionUser } from "@/lib/auth-helpers"
-import { extractText, getFileType } from "@/lib/parsers"
+import { getFileType } from "@/lib/parsers/file-type"
+import { cleanupFailedUpload, processBookUpload } from "@/lib/process-book-upload"
 import { prisma } from "@/lib/prisma"
-import { readStoredFile, saveFile } from "@/lib/storage"
+import { saveFile } from "@/lib/storage"
 import { MAX_UPLOAD_BYTES } from "@/lib/upload-constants"
 
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
 type SignedUploadBody = {
@@ -14,23 +18,56 @@ type SignedUploadBody = {
   fileName?: string
 }
 
-async function createBookFromBuffer({
-  user,
+function getAccent(user: Awaited<ReturnType<typeof requireSessionUser>>) {
+  return (user.preferences?.defaultAccent ?? "AMERICAN") as
+    | "BRITISH"
+    | "AMERICAN"
+    | "NIGERIAN"
+}
+
+async function queueBookProcessing({
   bookId,
   storagePath,
   fileName,
-  buffer,
+  user,
 }: {
-  user: Awaited<ReturnType<typeof requireSessionUser>>
   bookId: string
   storagePath: string
   fileName: string
-  buffer: Buffer
+  user: Awaited<ReturnType<typeof requireSessionUser>>
 }) {
-  const { fileType, chunks } = await extractText(fileName, buffer)
+  after(async () => {
+    try {
+      await processBookUpload({
+        bookId,
+        storagePath,
+        fileName,
+        userId: user.id,
+        defaultAccent: getAccent(user),
+        defaultSpeed: user.preferences?.defaultSpeed ?? 1,
+      })
+    } catch (error) {
+      console.error("Book processing failed:", error)
+      await cleanupFailedUpload({ bookId, storagePath })
+    }
+  })
+}
 
-  if (chunks.length === 0) {
-    throw new Error("Could not extract readable text from this file.")
+async function createProcessingBook({
+  bookId,
+  storagePath,
+  fileName,
+  user,
+}: {
+  bookId: string
+  storagePath: string
+  fileName: string
+  user: Awaited<ReturnType<typeof requireSessionUser>>
+}) {
+  const fileType = getFileType(fileName)
+
+  if (!fileType) {
+    throw new Error("Unsupported file type. Use PDF, DOCX, or EPUB.")
   }
 
   const title = fileName.replace(/\.[^.]+$/, "")
@@ -43,25 +80,7 @@ async function createBookFromBuffer({
       fileName,
       fileType,
       storagePath,
-      totalChunks: chunks.length,
-      chunks: {
-        create: chunks.map((content, index) => ({
-          index,
-          content,
-        })),
-      },
-      progress: {
-        create: {
-          userId: user.id,
-          chunkIndex: 0,
-          positionMs: 0,
-          accent: (user.preferences?.defaultAccent ?? "AMERICAN") as
-            | "BRITISH"
-            | "AMERICAN"
-            | "NIGERIAN",
-          speed: user.preferences?.defaultSpeed ?? 1,
-        },
-      },
+      totalChunks: 0,
     },
     select: {
       id: true,
@@ -101,14 +120,14 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Invalid storage path" }, { status: 403 })
       }
 
-      const buffer = await readStoredFile(storagePath)
-      const book = await createBookFromBuffer({
-        user,
+      const book = await createProcessingBook({
         bookId,
         storagePath,
         fileName,
-        buffer,
+        user,
       })
+
+      await queueBookProcessing({ bookId, storagePath, fileName, user })
 
       return NextResponse.json(book)
     }
@@ -133,12 +152,18 @@ export async function POST(request: Request) {
 
     await saveFile(storagePath, buffer)
 
-    const book = await createBookFromBuffer({
-      user,
+    const book = await createProcessingBook({
       bookId,
       storagePath,
       fileName: file.name,
-      buffer,
+      user,
+    })
+
+    await queueBookProcessing({
+      bookId,
+      storagePath,
+      fileName: file.name,
+      user,
     })
 
     return NextResponse.json(book)
